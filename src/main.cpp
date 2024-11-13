@@ -60,10 +60,10 @@ private:
         auto self = shared_from_this();
 
         http::async_read(m_socket, m_buffer, m_request,
-                         [self](boost::beast::error_code ec, std::size_t bytes_transferred)
+                         [self](boost::beast::error_code error_code, std::size_t bytes_transferred)
                          {
                              boost::ignore_unused(bytes_transferred);
-                             if(!ec)
+                             if(!error_code)
                                  self->process_request();
                          });
     }
@@ -79,11 +79,11 @@ private:
             case http::verb::get:
                 m_response.result(http::status::ok);
                 // response.set(http::field::server, "Beast");
-                create_response();
+                create_get_response();
                 break;
 
             case http::verb::post:
-
+                create_post_response();
             default:
                 // We return responses indicating an error if
                 // we do not recognize the request method.
@@ -98,7 +98,7 @@ private:
     }
 
     // Construct a response message based on the program state.
-    void create_response()
+    void create_get_response()
     {
         if(m_request.target() == "/count")
         {
@@ -132,6 +132,12 @@ private:
         }
     }
 
+    void create_post_response()
+    {
+        boost::beast::ostream(m_response.body()) << "{\"devesh\":\"gadha\"}";
+        m_response.result(http::status::ok);
+    }
+
     // Asynchronously transmit the response message.
     void write_response()
     {
@@ -142,9 +148,9 @@ private:
         m_response.set(http::field::content_length, response_size);
 
         http::async_write(m_socket, m_response,
-                          [self](boost::beast::error_code ec, std::size_t)
+                          [self](boost::beast::error_code error_code, std::size_t)
                           {
-                              auto return_ec = self->m_socket.shutdown(tcp::socket::shutdown_send, ec);
+                              auto return_ec = self->m_socket.shutdown(tcp::socket::shutdown_send, error_code);
                               self->m_deadline.cancel();
                           });
     }
@@ -155,12 +161,12 @@ private:
         auto self = shared_from_this();
 
         m_deadline.async_wait(
-            [self](boost::beast::error_code ec)
+            [self](boost::beast::error_code error_code)
             {
-                if(!ec)
+                if(!error_code)
                 {
                     // Close socket to cancel any outstanding operation.
-                    auto return_ec = self->m_socket.close(ec);
+                    auto return_ec = self->m_socket.close(error_code);
                 }
             });
     }
@@ -170,9 +176,9 @@ private:
 void http_server(tcp::acceptor& acceptor, tcp::socket& socket)
 {
     acceptor.async_accept(socket,
-                          [&](boost::beast::error_code ec)
+                          [&](boost::beast::error_code error_code)
                           {
-                              if(!ec)
+                              if(!error_code)
                                   std::make_shared<http_connection>(std::move(socket))->start();
                               http_server(acceptor, socket);
                           });
